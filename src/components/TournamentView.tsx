@@ -13,8 +13,10 @@ import {
   Mail,
   ShieldCheck,
   TrendingUp,
+  Clock,
 } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { TournamentCelebrationModal } from './TournamentCelebrationModal';
 
 export const TournamentView: React.FC = () => {
   const {
@@ -23,6 +25,9 @@ export const TournamentView: React.FC = () => {
     isWeekendTournamentActive,
     tournamentEquityUSD,
     leaderboard,
+    tournamentTimeRemaining,
+    showCelebrationModal,
+    setShowCelebrationModal,
     settings,
   } = useAtta();
 
@@ -92,7 +97,15 @@ export const TournamentView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-5">
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Session Time Remaining</span>
+              <span className="text-sm font-extrabold font-mono text-amber-400 flex items-center justify-end space-x-1">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{tournamentTimeRemaining}</span>
+              </span>
+            </div>
+
             <div className="text-right">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Tournament Equity</span>
               <span className="text-xl font-extrabold font-mono text-trade-gold">${tournamentEquityUSD.toFixed(2)} USD</span>
@@ -152,6 +165,12 @@ export const TournamentView: React.FC = () => {
           <OrderPanel />
         </div>
       </div>
+
+      <TournamentCelebrationModal
+        isOpen={showCelebrationModal}
+        onClose={() => setShowCelebrationModal(false)}
+      />
     </div>
   );
 };
+

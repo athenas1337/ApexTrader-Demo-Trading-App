@@ -54,6 +54,10 @@ interface AttaContextType {
   isWeekendTournamentActive: boolean;
   tournamentEquityUSD: number;
   leaderboard: LeaderboardEntry[];
+  tournamentTimeRemaining: string;
+  tournamentSecondsLeft: number;
+  showCelebrationModal: boolean;
+  setShowCelebrationModal: (show: boolean) => void;
 
   // Trading lists
   positions: Position[];
@@ -757,7 +761,67 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPriceAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  // Real-Time PnL Calculation Interceptor (Supports Free PnL Mode)
+  // Tournament 24-Hour Session Timer & Celebration State
+  const [tournamentSecondsLeft, setTournamentSecondsLeft] = useState<number>(86400);
+  const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const diffMs = endOfDay.getTime() - now.getTime();
+      const secs = Math.max(0, Math.floor(diffMs / 1000));
+      setTournamentSecondsLeft(secs);
+
+      if (secs === 0) {
+        setShowCelebrationModal(true);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatSecondsToHMS = (totalSeconds: number): string => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+  };
+
+  const tournamentTimeRemaining = formatSecondsToHMS(tournamentSecondsLeft);
+
+  // Dynamic Tournament Bot Entries State & Micro-Interval Simulation Loop
+  const [botLeaderboard, setBotLeaderboard] = useState<Array<{
+    userId: string;
+    displayName: string;
+    authType: AuthStatus;
+    totalEquityUSD: number;
+  }>>([
+    { userId: 'usr_pro1', displayName: 'CryptoWhale_X', authType: 'GOOGLE_USER', totalEquityUSD: 485.20 },
+    { userId: 'usr_pro2', displayName: 'ForexMaster_ID', authType: 'EMAIL_USER', totalEquityUSD: 342.50 },
+    { userId: 'usr_pro3', displayName: 'SatoshiAtha', authType: 'GOOGLE_USER', totalEquityUSD: 215.80 },
+    { userId: 'usr_pro4', displayName: 'AlphaPip_99', authType: 'EMAIL_USER', totalEquityUSD: 98.40 },
+    { userId: 'usr_pro5', displayName: 'BullishKing_ID', authType: 'EMAIL_USER', totalEquityUSD: 88.10 },
+  ]);
+
+  // Micro-interval loop to apply realistic floating variations to bot equity states every 3s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setBotLeaderboard((prevBots) =>
+        prevBots.map((bot) => {
+          const delta = (Math.random() - 0.48) * 3.5;
+          const newEquity = Math.max(10, +(bot.totalEquityUSD + delta).toFixed(2));
+          return { ...bot, totalEquityUSD: newEquity };
+        })
+      );
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Real-Time PnL & Dynamic Used Margin Calculation Interceptor
   const updatedPositions = positions.map((pos) => {
     const currentPrice = livePrices[pos.symbol] || pos.entryPrice;
     let pnlUSD = 0;
@@ -778,7 +842,11 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const floatingPnlInBaseCurrency = convertFromUSD(pnlUSD, baseCurrency);
-    const pnlPercentage = (floatingPnlInBaseCurrency / pos.marginInBaseCurrency) * 100;
+    const pnlPercentage = pos.marginInBaseCurrency > 0 ? (floatingPnlInBaseCurrency / pos.marginInBaseCurrency) * 100 : 0;
+
+    // Used Margin = (AssetPrice * PositionSize) / Leverage
+    const dynamicMarginUSD = (currentPrice * pos.quantity) / pos.leverage;
+    const dynamicMarginInBaseCurrency = convertFromUSD(dynamicMarginUSD, baseCurrency);
 
     return {
       ...pos,
@@ -786,12 +854,13 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       floatingPnlInUSD: pnlUSD,
       floatingPnlInBaseCurrency,
       floatingPnlPercentage: pnlPercentage,
+      dynamicMarginInBaseCurrency,
       pipsPnl,
     };
   });
 
   const totalUnrealizedPnlInBaseCurrency = updatedPositions.reduce((acc, p) => acc + p.floatingPnlInBaseCurrency, 0);
-  const usedMarginInBaseCurrency = positions.reduce((acc, p) => acc + p.marginInBaseCurrency, 0) + limitOrders.reduce((acc, l) => acc + l.marginInBaseCurrency, 0);
+  const usedMarginInBaseCurrency = updatedPositions.reduce((acc, p) => acc + (p.dynamicMarginInBaseCurrency || p.marginInBaseCurrency), 0) + limitOrders.reduce((acc, l) => acc + l.marginInBaseCurrency, 0);
   const freeMarginInBaseCurrency = wallet.balanceInBaseCurrency;
   const totalEquityInBaseCurrency = wallet.balanceInBaseCurrency + usedMarginInBaseCurrency + totalUnrealizedPnlInBaseCurrency;
 
@@ -800,14 +869,34 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const tournamentEquityUSD = 100 + convertToUSD(totalUnrealizedPnlInBaseCurrency, baseCurrency);
 
-  // Social Leaderboard Generation
-  const leaderboard: LeaderboardEntry[] = [
-    { rank: 1, userId: 'usr_pro1', displayName: 'CryptoWhale_X', authType: 'GOOGLE_USER' as AuthStatus, totalEquityUSD: 485.20, returnPercent: 385.2 },
-    { rank: 2, userId: 'usr_pro2', displayName: 'ForexMaster_ID', authType: 'EMAIL_USER' as AuthStatus, totalEquityUSD: 342.50, returnPercent: 242.5 },
-    { rank: 3, userId: 'usr_pro3', displayName: 'SatoshiAtha', authType: 'GOOGLE_USER' as AuthStatus, totalEquityUSD: 215.80, returnPercent: 115.8 },
-    { rank: 4, userId: userProfile.id, displayName: `${userProfile.displayName} (You)`, authType: userProfile.authType, totalEquityUSD: tournamentEquityUSD, returnPercent: (tournamentEquityUSD - 100), isCurrentUser: true },
-    { rank: 5, userId: 'usr_pro4', displayName: 'AlphaPip_99', authType: 'EMAIL_USER' as AuthStatus, totalEquityUSD: 98.40, returnPercent: -1.6 },
-  ].sort((a, b) => b.totalEquityUSD - a.totalEquityUSD).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+  // Social Leaderboard Generation with dynamic Bot Equities & Real-time User Placement
+  const userLeaderboardEntry = {
+    userId: userProfile.id,
+    displayName: `${userProfile.displayName} (You)`,
+    authType: userProfile.authType,
+    totalEquityUSD: tournamentEquityUSD,
+    isCurrentUser: true,
+  };
+
+  const allEntries: Array<{
+    userId: string;
+    displayName: string;
+    authType: AuthStatus;
+    totalEquityUSD: number;
+    isCurrentUser?: boolean;
+  }> = [...botLeaderboard, userLeaderboardEntry];
+
+  const leaderboard: LeaderboardEntry[] = allEntries
+    .sort((a, b) => b.totalEquityUSD - a.totalEquityUSD)
+    .map((entry, idx) => ({
+      rank: idx + 1,
+      userId: entry.userId,
+      displayName: entry.displayName,
+      authType: entry.authType,
+      totalEquityUSD: entry.totalEquityUSD,
+      returnPercent: +((entry.totalEquityUSD - 100)).toFixed(1),
+      isCurrentUser: entry.isCurrentUser,
+    }));
 
   // Price Alert Trigger
   useEffect(() => {
@@ -847,6 +936,10 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isWeekendTournamentActive,
         tournamentEquityUSD,
         leaderboard,
+        tournamentTimeRemaining,
+        tournamentSecondsLeft,
+        showCelebrationModal,
+        setShowCelebrationModal,
         positions: updatedPositions,
         limitOrders,
         tradeHistory,

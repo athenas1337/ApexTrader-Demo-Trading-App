@@ -80,6 +80,7 @@ export interface Position {
   floatingPnlInBaseCurrency: number;
   floatingPnlInUSD: number;
   floatingPnlPercentage: number;
+  dynamicMarginInBaseCurrency?: number;
   pipsPnl?: number;
 
   openedAt: number;

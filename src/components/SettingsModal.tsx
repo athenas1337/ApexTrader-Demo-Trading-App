@@ -30,6 +30,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     settings,
     updateSettings,
     redeemSecretCode,
+    uiMode,
+    setUiMode,
   } = useAtta();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'risk' | 'audiovisual' | 'redeem'>('profile');
@@ -253,6 +255,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               >
                 <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.audioSignals ? 'translate-x-6' : 'translate-x-0'}`} />
               </button>
+            </div>
+
+            <div className="bg-dark-900/80 border border-dark-700 rounded-2xl p-4 space-y-2">
+              <label className="font-bold text-white text-sm block font-sans">UI Experience Mode</label>
+              <div className="grid grid-cols-3 gap-2 text-center font-sans font-bold">
+                <button
+                  type="button"
+                  onClick={() => setUiMode('noob')}
+                  className={`py-2 px-2 rounded-xl border text-xs transition-all ${
+                    uiMode === 'noob' ? 'bg-amber-500 text-dark-900 border-amber-400 font-extrabold shadow' : 'bg-dark-800 text-slate-400 border-dark-600 hover:text-white'
+                  }`}
+                >
+                  Noob Mode
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setUiMode('lite')}
+                  className={`py-2 px-2 rounded-xl border text-xs transition-all ${
+                    uiMode === 'lite' ? 'bg-trade-accent text-white border-blue-400 font-extrabold shadow' : 'bg-dark-800 text-slate-400 border-dark-600 hover:text-white'
+                  }`}
+                >
+                  Lite Mode
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setUiMode('pro')}
+                  className={`py-2 px-2 rounded-xl border text-xs transition-all ${
+                    uiMode === 'pro' ? 'bg-emerald-500 text-dark-900 border-emerald-400 font-extrabold shadow' : 'bg-dark-800 text-slate-400 border-dark-600 hover:text-white'
+                  }`}
+                >
+                  Pro Mode
+                </button>
+              </div>
+              <span className="text-[11px] text-slate-400 font-sans block mt-1">
+                {uiMode === 'noob' && 'Gamified simplified price prediction cards.'}
+                {uiMode === 'lite' && 'Modern clean chart & order execution deck.'}
+                {uiMode === 'pro' && 'High-utility workstation with Order Book depth wall & live position quick close.'}
+              </span>
             </div>
 
             <div className="bg-dark-900/80 border border-dark-700 rounded-2xl p-4 space-y-2">
