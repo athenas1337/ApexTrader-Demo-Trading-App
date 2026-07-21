@@ -6,13 +6,14 @@ import { OrderPanel } from './components/OrderPanel';
 import { OrderBook } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
 import { Fundamentals } from './components/Fundamentals';
+import { TournamentView } from './components/TournamentView';
 import { MarginCallBanner } from './components/MarginCallBanner';
 import { formatBaseCurrency, formatPrice } from './utils/formatters';
-import { ShieldCheck, Activity, ArrowUpRight, ArrowDownRight, Sparkles, Heart } from 'lucide-react';
+import { ShieldCheck, Activity, ArrowUpRight, ArrowDownRight, Sparkles } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { uiMode, selectedSymbol, livePrices, baseCurrency, totalEquityInBaseCurrency, openPosition } = useAtta();
-  const [activeTab, setActiveTab] = useState<'trading' | 'portfolio' | 'fundamentals'>('trading');
+  const [activeTab, setActiveTab] = useState<'trading' | 'portfolio' | 'fundamentals' | 'tournament'>('trading');
 
   const currentPrice = livePrices[selectedSymbol.symbol] || selectedSymbol.basePrice;
 
@@ -28,7 +29,7 @@ const MainLayout: React.FC = () => {
       <main className="flex-1 max-w-[1920px] w-full mx-auto p-4 sm:p-6">
         {activeTab === 'trading' && (
           <>
-            {/* NOOB MODE: Gamified, ultra-clean UI, big targets, no technical jargon */}
+            {/* NOOB MODE */}
             {uiMode === 'noob' && (
               <div className="max-w-4xl mx-auto space-y-6 text-center py-6">
                 <div className="bg-dark-800 border border-dark-600/80 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
@@ -90,7 +91,7 @@ const MainLayout: React.FC = () => {
               </div>
             )}
 
-            {/* LITE MODE: Standard modernized layout */}
+            {/* LITE MODE */}
             {uiMode === 'lite' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
                 <div className="lg:col-span-8 flex flex-col space-y-6">
@@ -102,17 +103,15 @@ const MainLayout: React.FC = () => {
               </div>
             )}
 
-            {/* PRO MODE: Dense financial workstation with Order Book depth wall */}
+            {/* PRO MODE */}
             {uiMode === 'pro' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
                 <div className="lg:col-span-7 flex flex-col space-y-4">
                   <TradingViewChart />
                 </div>
-
                 <div className="lg:col-span-2 flex flex-col">
                   <OrderBook />
                 </div>
-
                 <div className="lg:col-span-3 flex flex-col">
                   <OrderPanel />
                 </div>
@@ -123,9 +122,10 @@ const MainLayout: React.FC = () => {
 
         {activeTab === 'portfolio' && <Portfolio />}
         {activeTab === 'fundamentals' && <Fundamentals />}
+        {activeTab === 'tournament' && <TournamentView />}
       </main>
 
-      {/* AttaTrader Footer with explicit credit */}
+      {/* Footer */}
       <footer className="bg-dark-800/90 border-t border-dark-600/60 py-3 px-4 text-xs text-slate-400 mt-auto">
         <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-3 font-mono">
           <div className="flex items-center space-x-4">
@@ -140,7 +140,6 @@ const MainLayout: React.FC = () => {
             </div>
           </div>
 
-          {/* Subtle Professional Footer Credit */}
           <div className="flex items-center space-x-4 text-[11px]">
             <span className="flex items-center space-x-1.5 text-slate-300 font-sans font-semibold">
               <span>Created by</span>

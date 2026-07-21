@@ -12,14 +12,20 @@ import {
   UIMode,
   ForexLotType,
   PriceAlert,
+  AuthStatus,
+  UserProfile,
+  SettingsState,
+  LeaderboardEntry,
 } from '../types/trading';
 import { BaseCurrencyCode, convertCurrency, convertFromUSD, convertToUSD } from '../services/fxRates';
 import { getFromStorage, saveToStorage, clearAllStorage } from '../utils/storage';
 import { getSymbolDetails, SUPPORTED_SYMBOLS, CRYPTO_SYMBOLS, FOREX_SYMBOLS } from '../services/symbols';
 import { priceFeed } from '../services/priceFeed';
+import { soundFx } from '../utils/audio';
 import confetti from 'canvas-confetti';
 
 const DEFAULT_INITIAL_BALANCE_USD = 10000;
+const TOURNAMENT_BALANCE_USD = 100;
 
 interface AttaContextType {
   // Config & State
@@ -32,6 +38,23 @@ interface AttaContextType {
   setMarketArena: (arena: MarketArena) => void;
   selectedSymbol: SymbolInfo;
   setSelectedSymbol: (symbol: SymbolInfo) => void;
+
+  // Execution Step 1: 3-Tier Auth Hierarchy State
+  userProfile: UserProfile;
+  loginEmail: (email: string, displayName?: string) => void;
+  loginGoogle: (displayName?: string, email?: string) => void;
+  logoutUser: () => void;
+  updateDisplayName: (name: string) => void;
+
+  // Execution Step 2: Settings & Secret Redeem (@thA1337)
+  settings: SettingsState;
+  updateSettings: (newSettings: Partial<SettingsState>) => void;
+  redeemSecretCode: (code: string) => { success: boolean; message: string };
+
+  // Execution Step 3: Tournament & Leaderboard
+  isWeekendTournamentActive: boolean;
+  tournamentEquityUSD: number;
+  leaderboard: LeaderboardEntry[];
 
   // Trading lists
   positions: Position[];
@@ -77,7 +100,27 @@ interface AttaContextType {
 const AttaContext = createContext<AttaContextType | undefined>(undefined);
 
 export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Storage Hydration with In-Memory Fallbacks
+  // 1. User Profile & Tiered Auth Hydration
+  const [userProfile, setUserProfile] = useState<UserProfile>(() =>
+    getFromStorage<UserProfile>('userProfile', {
+      id: `usr_guest_${Math.random().toString(36).substr(2, 6)}`,
+      displayName: 'Guest Trader',
+      authType: 'GUEST',
+    })
+  );
+
+  // 2. Settings & Dev Mode Hydration
+  const [settings, setSettings] = useState<SettingsState>(() =>
+    getFromStorage<SettingsState>('settings', {
+      devModeBypass: false,
+      riskRule2Percent: false,
+      audioSignals: true,
+      defaultChartStyle: 'candles',
+      defaultForexLeverage: 100,
+    })
+  );
+
+  // 3. Wallet & Currency State
   const [baseCurrency, setBaseCurrencyState] = useState<BaseCurrencyCode>(() =>
     getFromStorage<BaseCurrencyCode>('baseCurrency', 'VUSD')
   );
@@ -126,7 +169,9 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
 
-  // 2. Persist states
+  // 4. Persistence Effect
+  useEffect(() => saveToStorage('userProfile', userProfile), [userProfile]);
+  useEffect(() => saveToStorage('settings', settings), [settings]);
   useEffect(() => saveToStorage('baseCurrency', baseCurrency), [baseCurrency]);
   useEffect(() => saveToStorage('wallet', wallet), [wallet]);
   useEffect(() => saveToStorage('uiMode', uiMode), [uiMode]);
@@ -138,13 +183,69 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveToStorage('topUpHistory', topUpHistory), [topUpHistory]);
   useEffect(() => saveToStorage('priceAlerts', priceAlerts), [priceAlerts]);
 
-  // Handle Base Currency Switching
+  // Auth Tier Handlers
+  const loginEmail = useCallback((email: string, displayName?: string) => {
+    setUserProfile({
+      id: `usr_${Math.random().toString(36).substr(2, 6)}`,
+      displayName: displayName || email.split('@')[0] || 'Email Trader',
+      email,
+      authType: 'EMAIL_USER',
+    });
+  }, []);
+
+  const loginGoogle = useCallback((displayName?: string, email?: string) => {
+    setUserProfile({
+      id: `usr_g_${Math.random().toString(36).substr(2, 6)}`,
+      displayName: displayName || 'Google Trader',
+      email: email || 'trader@gmail.com',
+      authType: 'GOOGLE_USER',
+    });
+  }, []);
+
+  const logoutUser = useCallback(() => {
+    setUserProfile({
+      id: `usr_guest_${Math.random().toString(36).substr(2, 6)}`,
+      displayName: 'Guest Trader',
+      authType: 'GUEST',
+    });
+  }, []);
+
+  const updateDisplayName = useCallback((name: string) => {
+    if (!name.trim()) return;
+    setUserProfile((prev) => ({ ...prev, displayName: name.trim() }));
+  }, []);
+
+  // Settings & Secret Code Redeem (@thA1337)
+  const updateSettings = useCallback((newSettings: Partial<SettingsState>) => {
+    setSettings((prev) => ({ ...prev, ...newSettings }));
+  }, []);
+
+  const redeemSecretCode = useCallback((code: string) => {
+    if (code.trim() === '@thA1337') {
+      setSettings((prev) => ({ ...prev, devModeBypass: true }));
+      try { confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } }); } catch (e) {}
+      return {
+        success: true,
+        message: '🎉 Secret Code @thA1337 Redeemed! Developer Mode Bypass Unlocked!',
+      };
+    }
+    return {
+      success: false,
+      message: 'Invalid secret code. Please check case-sensitivity (@thA1337).',
+    };
+  }, []);
+
+  // Weekend Tournament Calendar Evaluation
+  const todayDay = new Date().getDay();
+  const isWeekendCalendar = todayDay === 0 || todayDay === 6; // Sunday = 0, Saturday = 6
+  const isWeekendTournamentActive = isWeekendCalendar || settings.devModeBypass;
+
+  // Base Currency Switcher
   const setBaseCurrency = useCallback(
     (newCurrency: BaseCurrencyCode) => {
       if (newCurrency === baseCurrency) return;
       setBaseCurrencyState(newCurrency);
 
-      // Convert available wallet balance to new base currency
       setWallet((prev) => {
         const newBalance = convertCurrency(prev.balanceInBaseCurrency, prev.baseCurrency, newCurrency);
         return {
@@ -158,7 +259,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const setUiMode = useCallback((mode: UIMode) => setUiModeState(mode), []);
-  
+
   const setMarketArena = useCallback((arena: MarketArena) => {
     setMarketArenaState(arena);
     if (arena === 'crypto' && selectedSymbol.type !== 'crypto') {
@@ -173,7 +274,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMarketArenaState(symbol.type);
   }, []);
 
-  // 3. Dynamic Pub/Sub Price Feeds
+  // Price Feed Subscription
   useEffect(() => {
     const symbolsToSub = new Set<string>([
       selectedSymbol.symbol,
@@ -196,9 +297,9 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [selectedSymbol.symbol, positions.length, limitOrders.length]);
 
-  // 4. Liquidation Price Calculator
+  // Liquidation Price helper
   const calculateLiquidationPrice = (side: OrderSide, entryPrice: number, leverage: number): number => {
-    const maintenanceMarginRatio = 0.005; // 0.5%
+    const maintenanceMarginRatio = 0.005;
     if (side === 'buy') {
       return entryPrice * (1 - 1 / leverage + maintenanceMarginRatio);
     } else {
@@ -206,7 +307,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 5. Open Position or Create Limit Order
+  // Open Position or Create Limit Order
   const openPosition = useCallback(
     ({
       symbolInfo,
@@ -233,11 +334,21 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       takeProfit?: number;
       stopLoss?: number;
     }) => {
+      // 2% Risk Limit Rule check if enabled
+      if (settings.riskRule2Percent) {
+        const maxMarginAllowed = wallet.balanceInBaseCurrency * 0.02;
+        if (marginInBaseCurrency > maxMarginAllowed) {
+          return {
+            success: false,
+            message: `Risk Management Rule Active: Max margin per trade is restricted to 2% (${maxMarginAllowed.toFixed(2)} ${baseCurrency}).`,
+          };
+        }
+      }
+
       if (marginInBaseCurrency <= 0) return { success: false, message: 'Margin must be greater than 0.' };
       if (marginInBaseCurrency > wallet.balanceInBaseCurrency)
         return { success: false, message: `Insufficient ${baseCurrency} balance for this margin.` };
 
-      // Deduct margin from wallet
       setWallet((prev) => ({ ...prev, balanceInBaseCurrency: prev.balanceInBaseCurrency - marginInBaseCurrency }));
 
       const effectivePrice = orderType === 'limit' && targetPrice ? targetPrice : entryPrice;
@@ -273,6 +384,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: 'pending',
         };
         setLimitOrders((prev) => [newLimitOrder, ...prev]);
+        if (settings.audioSignals) soundFx.playOrderFilledSound();
         return { success: true, message: `Limit order placed at ${targetPrice}` };
       } else {
         const newPosition: Position = {
@@ -298,13 +410,14 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
           openedAt: Date.now(),
         };
         setPositions((prev) => [newPosition, ...prev]);
+        if (settings.audioSignals) soundFx.playOrderFilledSound();
         return { success: true, message: `Opened ${side.toUpperCase()} ${symbolInfo.name} position` };
       }
     },
-    [baseCurrency, wallet.balanceInBaseCurrency]
+    [baseCurrency, wallet.balanceInBaseCurrency, settings.riskRule2Percent, settings.audioSignals]
   );
 
-  // 6. Close Position
+  // Close Position
   const closePosition = useCallback(
     (positionId: string, reason: 'manual' | 'tp' | 'sl' | 'liquidation' | 'margin_call' = 'manual') => {
       setPositions((prevPositions) => {
@@ -317,7 +430,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (pos.symbolInfo.type === 'forex') {
           const pipSize = pos.symbolInfo.pipSize || 0.0001;
           const pips = pos.side === 'buy' ? (currentMarketPrice - pos.entryPrice) / pipSize : (pos.entryPrice - currentMarketPrice) / pipSize;
-          const pipValueUSD = (pos.quantity * pipSize);
+          const pipValueUSD = pos.quantity * pipSize;
           pnlUSD = pips * pipValueUSD;
         } else {
           pnlUSD = pos.side === 'buy' ? (currentMarketPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - currentMarketPrice) * pos.quantity;
@@ -330,14 +443,12 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const pnlInBaseCurrency = convertFromUSD(pnlUSD, baseCurrency);
         const returnedMargin = Math.max(0, pos.marginInBaseCurrency + pnlInBaseCurrency);
 
-        // Update Wallet
         setWallet((prev) => ({
           ...prev,
           balanceInBaseCurrency: prev.balanceInBaseCurrency + returnedMargin,
           realizedPnlUSD: prev.realizedPnlUSD + pnlUSD,
         }));
 
-        // Log History
         const historyItem: TradeHistoryItem = {
           id: `hist_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
           positionId: pos.id,
@@ -358,6 +469,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setTradeHistory((prev) => [historyItem, ...prev]);
 
+        if (settings.audioSignals) soundFx.playOrderFilledSound();
         if (pnlUSD > 50) {
           try { confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 } }); } catch (e) {}
         }
@@ -365,10 +477,10 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return prevPositions.filter((p) => p.id !== positionId);
       });
     },
-    [baseCurrency, livePrices]
+    [baseCurrency, livePrices, settings.audioSignals]
   );
 
-  // 7. Cancel Limit Order
+  // Cancel Limit Order
   const cancelLimitOrder = useCallback((orderId: string) => {
     setLimitOrders((prev) => {
       const order = prev.find((o) => o.id === orderId);
@@ -379,9 +491,9 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  // 8. Top Up Account (Supports up to $1,000,000 USD equivalent in any base currency)
+  // Top Up Account
   const topUpAccount = useCallback(
-    (amountInBaseCurrency: number, note: string = 'AttaTrader Balance Top Up') => {
+    (amountInBaseCurrency: number, note: string = 'AttaTrader Capital Top Up') => {
       const amountInUSD = convertToUSD(amountInBaseCurrency, baseCurrency);
 
       if (isNaN(amountInBaseCurrency) || amountInBaseCurrency <= 0 || amountInUSD > 1000000) {
@@ -407,7 +519,6 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       setTopUpHistory((prev) => [record, ...prev]);
-
       try { confetti({ particleCount: 80, spread: 90, origin: { y: 0.6 } }); } catch (e) {}
 
       return {
@@ -418,7 +529,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [baseCurrency]
   );
 
-  // 9. Reset Account
+  // Reset Account
   const resetAccount = useCallback(() => {
     clearAllStorage();
     setBaseCurrencyState('VUSD');
@@ -439,7 +550,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSelectedSymbolState(CRYPTO_SYMBOLS[0]);
   }, []);
 
-  // 10. Price Alerts Management
+  // Price Alerts
   const addPriceAlert = useCallback((symbol: string, targetPrice: number, condition: 'above' | 'below') => {
     const alert: PriceAlert = {
       id: `alert_${Date.now()}`,
@@ -456,7 +567,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPriceAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  // 11. Real-Time PnL & Cross-Currency Calculations
+  // Real-Time PnL Calculation
   const updatedPositions = positions.map((pos) => {
     const currentPrice = livePrices[pos.symbol] || pos.entryPrice;
     let pnlUSD = 0;
@@ -489,49 +600,21 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const freeMarginInBaseCurrency = wallet.balanceInBaseCurrency;
   const totalEquityInBaseCurrency = wallet.balanceInBaseCurrency + usedMarginInBaseCurrency + totalUnrealizedPnlInBaseCurrency;
 
-  // Margin Call Level (%) = (Total Equity / Used Margin) * 100
   const marginLevelPercentage = usedMarginInBaseCurrency > 0 ? (totalEquityInBaseCurrency / usedMarginInBaseCurrency) * 100 : 999;
   const isMarginCallWarning = marginLevelPercentage < 100 && usedMarginInBaseCurrency > 0;
 
-  // Automated Margin Call Liquidation check (<= 50%)
-  useEffect(() => {
-    if (usedMarginInBaseCurrency > 0 && marginLevelPercentage <= 50 && positions.length > 0) {
-      // Find worst performing position and liquidate it automatically
-      const worstPosition = [...updatedPositions].sort((a, b) => a.floatingPnlInBaseCurrency - b.floatingPnlInBaseCurrency)[0];
-      if (worstPosition) {
-        closePosition(worstPosition.id, 'margin_call');
-      }
-    }
-  }, [marginLevelPercentage, usedMarginInBaseCurrency, positions.length, updatedPositions, closePosition]);
+  const tournamentEquityUSD = 100 + convertToUSD(totalUnrealizedPnlInBaseCurrency, baseCurrency);
 
-  // Automated TP / SL triggers
-  useEffect(() => {
-    positions.forEach((pos) => {
-      const currentPrice = livePrices[pos.symbol];
-      if (!currentPrice) return;
+  // Social Leaderboard Generation
+  const leaderboard: LeaderboardEntry[] = [
+    { rank: 1, userId: 'usr_pro1', displayName: 'CryptoWhale_X', authType: 'GOOGLE_USER' as AuthStatus, totalEquityUSD: 485.20, returnPercent: 385.2 },
+    { rank: 2, userId: 'usr_pro2', displayName: 'ForexMaster_ID', authType: 'EMAIL_USER' as AuthStatus, totalEquityUSD: 342.50, returnPercent: 242.5 },
+    { rank: 3, userId: 'usr_pro3', displayName: 'SatoshiAtha', authType: 'GOOGLE_USER' as AuthStatus, totalEquityUSD: 215.80, returnPercent: 115.8 },
+    { rank: 4, userId: userProfile.id, displayName: `${userProfile.displayName} (You)`, authType: userProfile.authType, totalEquityUSD: tournamentEquityUSD, returnPercent: (tournamentEquityUSD - 100), isCurrentUser: true },
+    { rank: 5, userId: 'usr_pro4', displayName: 'AlphaPip_99', authType: 'EMAIL_USER' as AuthStatus, totalEquityUSD: 98.40, returnPercent: -1.6 },
+  ].sort((a, b) => b.totalEquityUSD - a.totalEquityUSD).map((entry, idx) => ({ ...entry, rank: idx + 1 }));
 
-      if ((pos.side === 'buy' && currentPrice <= pos.liquidationPrice) || (pos.side === 'sell' && currentPrice >= pos.liquidationPrice)) {
-        closePosition(pos.id, 'liquidation');
-        return;
-      }
-
-      if (pos.takeProfit) {
-        if ((pos.side === 'buy' && currentPrice >= pos.takeProfit) || (pos.side === 'sell' && currentPrice <= pos.takeProfit)) {
-          closePosition(pos.id, 'tp');
-          return;
-        }
-      }
-
-      if (pos.stopLoss) {
-        if ((pos.side === 'buy' && currentPrice <= pos.stopLoss) || (pos.side === 'sell' && currentPrice >= pos.stopLoss)) {
-          closePosition(pos.id, 'sl');
-          return;
-        }
-      }
-    });
-  }, [livePrices, positions, closePosition]);
-
-  // Automated Price Alert evaluation
+  // Price Alert Trigger Notification
   useEffect(() => {
     priceAlerts.forEach((alert) => {
       if (!alert.active) return;
@@ -540,18 +623,11 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const isTriggered = alert.condition === 'above' ? currentPrice >= alert.targetPrice : currentPrice <= alert.targetPrice;
       if (isTriggered) {
-        // Mark alert triggered
         setPriceAlerts((prev) => prev.map((a) => (a.id === alert.id ? { ...a, active: false, triggeredAt: Date.now() } : a)));
-        try {
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(`AttaTrader Price Alert: ${alert.symbol}`, {
-              body: `${alert.symbol} hit target price of ${alert.targetPrice}!`,
-            });
-          }
-        } catch (e) {}
+        if (settings.audioSignals) soundFx.playPriceAlertSound();
       }
     });
-  }, [livePrices, priceAlerts]);
+  }, [livePrices, priceAlerts, settings.audioSignals]);
 
   return (
     <AttaContext.Provider
@@ -565,6 +641,17 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setMarketArena,
         selectedSymbol,
         setSelectedSymbol,
+        userProfile,
+        loginEmail,
+        loginGoogle,
+        logoutUser,
+        updateDisplayName,
+        settings,
+        updateSettings,
+        redeemSecretCode,
+        isWeekendTournamentActive,
+        tournamentEquityUSD,
+        leaderboard,
         positions: updatedPositions,
         limitOrders,
         tradeHistory,
@@ -599,5 +686,4 @@ export const useAtta = (): AttaContextType => {
   return context;
 };
 
-// Backward compatibility alias hook
 export const useVST = useAtta;

@@ -13,21 +13,20 @@ import {
   BarChart2,
   PieChart,
   Layers,
-  RefreshCw,
-  Calculator,
-  Bell,
-  Sparkles,
+  Settings,
+  Trophy,
   Zap,
   Globe,
+  User,
+  Sparkles,
 } from 'lucide-react';
 import { TopUpModal } from './TopUpModal';
 import { SecurityModal } from './SecurityModal';
-import { FinancialCalculator } from './FinancialCalculator';
-import { PriceAlertsModal } from './PriceAlertsModal';
+import { SettingsModal } from './SettingsModal';
 
 interface HeaderProps {
-  activeTab: 'trading' | 'portfolio' | 'fundamentals';
-  setActiveTab: (tab: 'trading' | 'portfolio' | 'fundamentals') => void;
+  activeTab: 'trading' | 'portfolio' | 'fundamentals' | 'tournament';
+  setActiveTab: (tab: 'trading' | 'portfolio' | 'fundamentals' | 'tournament') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
@@ -41,21 +40,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     setMarketArena,
     selectedSymbol,
     setSelectedSymbol,
+    userProfile,
+    isWeekendTournamentActive,
     livePrices,
-    totalUnrealizedPnlInBaseCurrency,
-    resetAccount,
   } = useAtta();
 
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
-  const [isCalcOpen, setIsCalcOpen] = useState(false);
-  const [isAlertsOpen, setIsAlertsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSymbolDropdownOpen, setIsSymbolDropdownOpen] = useState(false);
   const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
 
   const currentPrice = livePrices[selectedSymbol.symbol] || selectedSymbol.basePrice;
-  const isPnlPositive = totalUnrealizedPnlInBaseCurrency >= 0;
-
   const currentSymbolsList = marketArena === 'crypto' ? CRYPTO_SYMBOLS : FOREX_SYMBOLS;
 
   return (
@@ -63,9 +59,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       <header className="bg-dark-800/95 backdrop-blur-md border-b border-dark-600/60 sticky top-0 z-40 px-4 py-2.5">
         <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-3">
           
-          {/* Left: Brand Identity & Market Arena Switcher */}
+          {/* Left: Brand & Market Switcher */}
           <div className="flex items-center space-x-3 sm:space-x-4">
-            {/* AttaTrader Logo */}
             <div className="flex items-center space-x-2.5 cursor-pointer" onClick={() => setActiveTab('trading')}>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-trade-green via-emerald-400 to-blue-500 flex items-center justify-center shadow-lg shadow-trade-green/20">
                 <TrendingUp className="w-5 h-5 text-dark-900 stroke-[2.5]" />
@@ -82,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
             <div className="h-6 w-px bg-dark-600 hidden md:block" />
 
-            {/* Crypto Arena vs Forex Hub Switcher */}
+            {/* Crypto Arena vs Forex Hub */}
             <div className="flex items-center bg-dark-900/80 p-0.5 rounded-xl border border-dark-600">
               <button
                 onClick={() => setMarketArena('crypto')}
@@ -149,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             </div>
           </div>
 
-          {/* Center Navigation Tabs */}
+          {/* Navigation Tabs */}
           <nav className="flex items-center bg-dark-900/60 p-1 rounded-xl border border-dark-600/50">
             <button
               onClick={() => setActiveTab('trading')}
@@ -160,6 +155,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <BarChart2 className="w-3.5 h-3.5" />
               <span>Trade</span>
             </button>
+
             <button
               onClick={() => setActiveTab('portfolio')}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -169,6 +165,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <Layers className="w-3.5 h-3.5" />
               <span>Portfolio</span>
             </button>
+
             <button
               onClick={() => setActiveTab('fundamentals')}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -178,31 +175,42 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <PieChart className="w-3.5 h-3.5" />
               <span>Analysis</span>
             </button>
+
+            {/* Tournament Tab */}
+            <button
+              onClick={() => setActiveTab('tournament')}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all relative ${
+                activeTab === 'tournament' ? 'bg-amber-500 text-dark-900 shadow' : 'text-amber-400 hover:text-amber-300'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              <span>Tournament</span>
+              {isWeekendTournamentActive && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-0.5 -right-0.5" />
+              )}
+            </button>
           </nav>
 
-          {/* Right: Base Currency Selector, UI Mode Switcher, Wallet Balance & Tools */}
+          {/* Right: Auth Profile Badge, Settings & Base Currency */}
           <div className="flex items-center space-x-2.5">
-            {/* UI Tiered Mode Switcher (Noob, Lite, Pro) */}
-            <div className="hidden lg:flex items-center bg-dark-900/90 p-0.5 rounded-xl border border-dark-600">
-              {(['noob', 'lite', 'pro'] as UIMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setUiMode(mode)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                    uiMode === mode ? 'bg-trade-accent text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
+            {/* Auth Profile Badge */}
+            <div
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center space-x-2 bg-dark-700 hover:bg-dark-600 border border-dark-600 rounded-xl px-2.5 py-1 cursor-pointer transition-all"
+              title="Click to manage profile and auth settings"
+            >
+              <div className={`w-2 h-2 rounded-full ${userProfile.authType === 'GUEST' ? 'bg-slate-400' : 'bg-emerald-400 animate-pulse'}`} />
+              <span className="text-xs font-bold text-white max-w-[100px] truncate">{userProfile.displayName}</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.2 font-mono rounded bg-dark-900 text-slate-400">
+                {userProfile.authType === 'GUEST' ? 'GUEST' : userProfile.authType === 'EMAIL_USER' ? 'EMAIL' : 'GOOGLE'}
+              </span>
             </div>
 
-            {/* Base Currency Dropdown (VUSD, VEUR, VJPY, VGBP, VIDR) */}
+            {/* Base Currency Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setIsCurrencyDropdownOpen(!isCurrencyDropdownOpen)}
                 className="bg-dark-700 hover:bg-dark-600 border border-dark-600 rounded-xl px-2.5 py-1.5 text-xs font-bold text-trade-gold flex items-center space-x-1"
-                title="Select Account Primary Base Currency"
               >
                 <span>{baseCurrency}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -251,27 +259,16 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </button>
             </div>
 
-            {/* Pro Financial Tools */}
-            {uiMode === 'pro' && (
-              <>
-                <button
-                  onClick={() => setIsCalcOpen(true)}
-                  className="p-2 text-slate-300 bg-dark-700 border border-dark-600 rounded-xl hover:text-white transition-all"
-                  title="Financial Risk & Lot Calculator"
-                >
-                  <Calculator className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setIsAlertsOpen(true)}
-                  className="p-2 text-slate-300 bg-dark-700 border border-dark-600 rounded-xl hover:text-amber-400 transition-all"
-                  title="Price Alerts Manager"
-                >
-                  <Bell className="w-4 h-4" />
-                </button>
-              </>
-            )}
+            {/* Settings Trigger */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 text-slate-300 bg-dark-700 border border-dark-600 rounded-xl hover:text-white transition-all"
+              title="AttaTrader Settings & Redeem Code"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
 
-            {/* Security Audit */}
+            {/* Security Audit Trigger */}
             <button
               onClick={() => setIsSecurityOpen(true)}
               className="p-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-xl hover:bg-emerald-500/20 transition-all"
@@ -285,8 +282,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
       <TopUpModal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} />
       <SecurityModal isOpen={isSecurityOpen} onClose={() => setIsSecurityOpen(false)} />
-      <FinancialCalculator isOpen={isCalcOpen} onClose={() => setIsCalcOpen(false)} />
-      <PriceAlertsModal isOpen={isAlertsOpen} onClose={() => setIsAlertsOpen(false)} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </>
   );
 };

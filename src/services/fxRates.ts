@@ -1,6 +1,7 @@
 /**
  * Cross-Currency FX Bridge Rates Service
  * Base Reference: VUSD (US Dollar = 1.0)
+ * USD to IDR calibrated to 17,500 IDR base market range.
  */
 
 export type BaseCurrencyCode = 'VUSD' | 'VEUR' | 'VJPY' | 'VGBP' | 'VIDR';
@@ -9,8 +10,8 @@ export interface BaseCurrencyConfig {
   code: BaseCurrencyCode;
   name: string;
   symbol: string;
-  rateToUSD: number; // How many units of this currency equal 1 USD
-  usdValue: number;  // How many USD equal 1 unit of this currency
+  rateToUSD: number; // Units of this currency per 1 USD
+  usdValue: number;  // USD value per 1 unit of this currency
   precision: number;
   locale: string;
 }
@@ -56,8 +57,8 @@ export const SUPPORTED_BASE_CURRENCIES: Record<BaseCurrencyCode, BaseCurrencyCon
     code: 'VIDR',
     name: 'Indonesian Rupiah (Virtual)',
     symbol: 'Rp ',
-    rateToUSD: 16200.0,
-    usdValue: 0.0000617,
+    rateToUSD: 17500.0, // Calibrated to 17,500 IDR base range
+    usdValue: 0.00005714,
     precision: 0,
     locale: 'id-ID',
   },
@@ -76,23 +77,17 @@ export const convertCurrency = (
   const fromConfig = SUPPORTED_BASE_CURRENCIES[from] || SUPPORTED_BASE_CURRENCIES.VUSD;
   const toConfig = SUPPORTED_BASE_CURRENCIES[to] || SUPPORTED_BASE_CURRENCIES.VUSD;
 
-  // Step 1: Convert source currency amount to USD
+  // 1. Convert source currency amount to USD
   const amountInUSD = amount * fromConfig.usdValue;
 
-  // Step 2: Convert USD amount to target currency
+  // 2. Convert USD amount to target currency
   return amountInUSD * toConfig.rateToUSD;
 };
 
-/**
- * Converts an amount in USD to the target virtual base currency.
- */
 export const convertFromUSD = (amountInUSD: number, target: BaseCurrencyCode): number => {
   return convertCurrency(amountInUSD, 'VUSD', target);
 };
 
-/**
- * Converts an amount in target virtual base currency to USD.
- */
 export const convertToUSD = (amountInTarget: number, source: BaseCurrencyCode): number => {
   return convertCurrency(amountInTarget, source, 'VUSD');
 };
