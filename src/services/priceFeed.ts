@@ -1,54 +1,16 @@
 /**
- * Dynamic Real-Time Ticker & Price Subscription Service
- * Connects to Binance WebSocket for Crypto and simulated tick feeds for Forex.
+ * Dynamic Pub/Sub Real-Time Ticker & Price Subscription Service
+ * Optimizes network bandwidth by opening WebSocket connections ONLY for active symbols & open positions.
  */
 
 type PriceCallback = (symbol: string, price: number) => void;
 
-class PriceFeedService {
+class DynamicPriceFeedService {
   private listeners: Map<string, Set<PriceCallback>> = new Map();
   private ws: WebSocket | null = null;
+  private currentSubscribedCryptoStreams: Set<string> = new Set();
   private prices: Map<string, number> = new Map();
-  private simulationIntervals: Map<string, number> = new Map();
-
-  constructor() {
-    this.connectBinanceWebSocket();
-  }
-
-  private connectBinanceWebSocket() {
-    try {
-      // Stream for crypto tickers: btcusdt, ethusdt, solusdt, bnbusdt, xrpusdt, adausdt, dogeusdt
-      const streams = ['btcusdt', 'ethusdt', 'solusdt', 'bnbusdt', 'xrpusdt', 'adausdt', 'dogeusdt']
-        .map((s) => `${s}@ticker`)
-        .join('/');
-
-      this.ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streams}`);
-
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data && data.s && data.c) {
-            const symbol = data.s.toUpperCase(); // e.g. BTCUSDT
-            const price = parseFloat(data.c); // Last price
-            this.updatePrice(symbol, price);
-          }
-        } catch (e) {
-          // Silent catch for unexpected payload
-        }
-      };
-
-      this.ws.onerror = () => {
-        // Fallback simulation handled automatically if WS drops
-      };
-
-      this.ws.onclose = () => {
-        // Auto-reconnect after 5 seconds
-        setTimeout(() => this.connectBinanceWebSocket(), 5000);
-      };
-    } catch (e) {
-      console.warn('Binance WebSocket initialization failed, using price ticker loop fallback.');
-    }
-  }
+  private forexSimulationIntervals: Map<string, number> = new Map();
 
   public subscribe(symbol: string, initialPrice: number, callback: PriceCallback): () => void {
     if (!this.listeners.has(symbol)) {
@@ -56,30 +18,30 @@ class PriceFeedService {
     }
     this.listeners.get(symbol)!.add(callback);
 
-    // Set initial price if not already present
+    // Store initial price
     if (!this.prices.has(symbol)) {
       this.prices.set(symbol, initialPrice);
     } else {
       callback(symbol, this.prices.get(symbol)!);
     }
 
-    // Start forex simulation ticks if forex symbol
-    if (!symbol.endsWith('USDT') && !this.simulationIntervals.has(symbol)) {
-      this.startForexSimulation(symbol, initialPrice);
-    }
+    // Re-evaluate active WebSocket connections dynamically
+    this.syncSubscribedStreams();
 
+    // Return un-subscribe function
     return () => {
-      const symbolListeners = this.listeners.get(symbol);
-      if (symbolListeners) {
-        symbolListeners.delete(callback);
-        if (symbolListeners.size === 0) {
+      const callbacks = this.listeners.get(symbol);
+      if (callbacks) {
+        callbacks.delete(callback);
+        if (callbacks.size === 0) {
           this.listeners.delete(symbol);
-          if (this.simulationIntervals.has(symbol)) {
-            window.clearInterval(this.simulationIntervals.get(symbol));
-            this.simulationIntervals.delete(symbol);
+          if (this.forexSimulationIntervals.has(symbol)) {
+            window.clearInterval(this.forexSimulationIntervals.get(symbol));
+            this.forexSimulationIntervals.delete(symbol);
           }
         }
       }
+      this.syncSubscribedStreams();
     };
   }
 
@@ -95,17 +57,88 @@ class PriceFeedService {
     }
   }
 
-  private startForexSimulation(symbol: string, basePrice: number) {
+  /**
+   * Dynamically syncs WebSocket stream connections so only active symbols are subscribed to
+   */
+  private syncSubscribedStreams() {
+    const activeCryptoSymbols = new Set<string>();
+    const activeForexSymbols = new Set<string>();
+
+    this.listeners.forEach((_, symbol) => {
+      if (symbol.endsWith('USDT') || symbol.endsWith('BTC')) {
+        activeCryptoSymbols.add(symbol.toLowerCase());
+      } else {
+        activeForexSymbols.add(symbol);
+      }
+    });
+
+    // Handle Forex simulation Ticks for active Forex symbols
+    activeForexSymbols.forEach((forexSym) => {
+      if (!this.forexSimulationIntervals.has(forexSym)) {
+        this.startForexSimulation(forexSym);
+      }
+    });
+
+    // Check if crypto streams changed
+    const newCryptoStreams = Array.from(activeCryptoSymbols).map((s) => `${s}@ticker`);
+    const streamKeys = new Set(newCryptoStreams);
+
+    const isDifferent =
+      streamKeys.size !== this.currentSubscribedCryptoStreams.size ||
+      Array.from(streamKeys).some((s) => !this.currentSubscribedCryptoStreams.has(s));
+
+    if (isDifferent) {
+      this.currentSubscribedCryptoStreams = streamKeys;
+      this.reconnectCryptoWebSocket(newCryptoStreams);
+    }
+  }
+
+  private reconnectCryptoWebSocket(streams: string[]) {
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    }
+
+    if (streams.length === 0) return;
+
+    try {
+      const streamPath = streams.join('/');
+      this.ws = new WebSocket(`wss://stream.binance.com:9443/ws/${streamPath}`);
+
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.s && data.c) {
+            const symbol = data.s.toUpperCase();
+            const price = parseFloat(data.c);
+            this.updatePrice(symbol, price);
+          }
+        } catch (e) {
+          // ignore
+        }
+      };
+
+      this.ws.onerror = () => {
+        // Safe fallback
+      };
+    } catch (e) {
+      console.warn('Binance WebSocket dynamic connection error:', e);
+    }
+  }
+
+  private startForexSimulation(symbol: string) {
+    const basePrice = this.prices.get(symbol) || 1.0;
     let current = basePrice;
+
     const interval = window.setInterval(() => {
-      // Small realistic forex random walk (±0.015%)
-      const changePercent = (Math.random() - 0.49) * 0.0003;
+      const changePercent = (Math.random() - 0.495) * 0.0003;
       current = Math.max(0.0001, current * (1 + changePercent));
       this.updatePrice(symbol, current);
-    }, 1500);
+    }, 1200);
 
-    this.simulationIntervals.set(symbol, interval);
+    this.forexSimulationIntervals.set(symbol, interval);
   }
 }
 
-export const priceFeed = new PriceFeedService();
+export const priceFeed = new DynamicPriceFeedService();

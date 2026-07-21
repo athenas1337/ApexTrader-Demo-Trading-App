@@ -1,6 +1,6 @@
 import { CryptoFundamental } from '../types/trading';
 
-// Pre-cached fallback data in case CoinGecko API rate limits hit
+// Pre-cached fallback data for top cryptocurrencies
 const MOCK_FUNDAMENTALS: Record<string, CryptoFundamental> = {
   BTCUSDT: {
     id: 'bitcoin',
@@ -19,7 +19,7 @@ const MOCK_FUNDAMENTALS: Record<string, CryptoFundamental> = {
     ath: 73750.07,
     ath_change_percentage: -11.2,
     ath_date: '2024-03-14T07:10:36.635Z',
-    description: 'Bitcoin is the first decentralized digital currency. It operates without a central bank or single administrator and relies on a peer-to-peer network for transactions.',
+    description: 'Bitcoin is the first decentralized digital currency operating on a peer-to-peer network.',
     sentiment_votes_up_percentage: 84.5,
   },
   ETHUSDT: {
@@ -39,7 +39,7 @@ const MOCK_FUNDAMENTALS: Record<string, CryptoFundamental> = {
     ath: 4891.70,
     ath_change_percentage: -28.8,
     ath_date: '2021-11-16T08:42:15.000Z',
-    description: 'Ethereum is a open-source, public, blockchain-based distributed computing platform featuring smart contract functionality.',
+    description: 'Ethereum is an open-source decentralized smart contract execution platform.',
     sentiment_votes_up_percentage: 79.2,
   },
   SOLUSDT: {
@@ -59,97 +59,14 @@ const MOCK_FUNDAMENTALS: Record<string, CryptoFundamental> = {
     ath: 260.06,
     ath_change_percentage: -43.9,
     ath_date: '2021-11-06T21:54:35.825Z',
-    description: 'Solana is a high-performance blockchain supporting builders around the world create crypto apps that scale today.',
+    description: 'Solana is a high-performance blockchain supporting fast transactions and dApps.',
     sentiment_votes_up_percentage: 81.0,
   },
-  BNBUSDT: {
-    id: 'binancecoin',
-    symbol: 'bnb',
-    name: 'BNB',
-    current_price: 580.40,
-    market_cap: 85200000000,
-    market_cap_rank: 4,
-    total_volume: 1200000000,
-    high_24h: 588.00,
-    low_24h: 572.10,
-    price_change_percentage_24h: 0.95,
-    circulating_supply: 147000000,
-    total_supply: 147000000,
-    max_supply: 200000000,
-    ath: 720.67,
-    ath_change_percentage: -19.4,
-    ath_date: '2024-06-06T12:00:00.000Z',
-    description: 'BNB powers the BNB Chain ecosystem and serves as the native utility token for trading fee discounts and decentralized finance.',
-    sentiment_votes_up_percentage: 76.8,
-  },
-  XRPUSDT: {
-    id: 'ripple',
-    symbol: 'xrp',
-    name: 'XRP',
-    current_price: 0.5840,
-    market_cap: 32600000000,
-    market_cap_rank: 7,
-    total_volume: 1850000000,
-    high_24h: 0.6120,
-    low_24h: 0.5690,
-    price_change_percentage_24h: -1.25,
-    circulating_supply: 55800000000,
-    total_supply: 99980000000,
-    max_supply: 100000000000,
-    ath: 3.84,
-    ath_change_percentage: -84.7,
-    ath_date: '2018-01-04T00:00:00.000Z',
-    description: 'XRP is a digital asset built for payments. It is the native digital asset on the XRP Ledger—an open-source, public blockchain.',
-    sentiment_votes_up_percentage: 72.4,
-  },
-  ADAUSDT: {
-    id: 'cardano',
-    symbol: 'ada',
-    name: 'Cardano',
-    current_price: 0.3820,
-    market_cap: 13700000000,
-    market_cap_rank: 10,
-    total_volume: 450000000,
-    high_24h: 0.3950,
-    low_24h: 0.3710,
-    price_change_percentage_24h: 0.78,
-    circulating_supply: 35800000000,
-    total_supply: 45000000000,
-    max_supply: 45000000000,
-    ath: 3.10,
-    ath_change_percentage: -87.6,
-    ath_date: '2021-09-02T06:00:00.000Z',
-    description: 'Cardano is a proof-of-stake blockchain platform that says its goal is to allow changemakers, innovators and visionaries to bring about positive global change.',
-    sentiment_votes_up_percentage: 68.0,
-  },
-  DOGEUSDT: {
-    id: 'dogecoin',
-    symbol: 'doge',
-    name: 'Dogecoin',
-    current_price: 0.1240,
-    market_cap: 18100000000,
-    market_cap_rank: 8,
-    total_volume: 920000000,
-    high_24h: 0.1290,
-    low_24h: 0.1205,
-    price_change_percentage_24h: 2.85,
-    circulating_supply: 145000000000,
-    total_supply: 145000000000,
-    max_supply: null,
-    ath: 0.7376,
-    ath_change_percentage: -83.1,
-    ath_date: '2021-05-08T05:00:00.000Z',
-    description: 'Dogecoin is based on the popular "doge" Internet meme and features a Shiba Inu on its logo.',
-    sentiment_votes_up_percentage: 75.0,
-  }
 };
 
-/**
- * Fetch Fundamental Crypto Analysis from CoinGecko or fallback mock cache
- */
 export const fetchCryptoFundamental = async (symbol: string): Promise<CryptoFundamental> => {
   const fallback = MOCK_FUNDAMENTALS[symbol] || MOCK_FUNDAMENTALS.BTCUSDT;
-  
+
   try {
     const coinId = fallback.id;
     const response = await fetch(
@@ -157,9 +74,7 @@ export const fetchCryptoFundamental = async (symbol: string): Promise<CryptoFund
       { headers: { Accept: 'application/json' } }
     );
 
-    if (!response.ok) {
-      return fallback;
-    }
+    if (!response.ok) return fallback;
 
     const data = await response.json();
     return {
@@ -184,7 +99,6 @@ export const fetchCryptoFundamental = async (symbol: string): Promise<CryptoFund
       sentiment_votes_up_percentage: data.sentiment_votes_up_percentage ?? fallback.sentiment_votes_up_percentage,
     };
   } catch (error) {
-    console.warn(`[CoinGecko API] Using fallback data for ${symbol}:`, error);
     return fallback;
   }
 };

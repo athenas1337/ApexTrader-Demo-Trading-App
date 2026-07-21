@@ -1,18 +1,35 @@
+import { BaseCurrencyCode, SUPPORTED_BASE_CURRENCIES } from '../services/fxRates';
+
 /**
- * Formats a number as VST / USD currency.
+ * Formats a number in the chosen Virtual Base Currency (VUSD, VEUR, VJPY, VGBP, VIDR).
  */
-export const formatCurrency = (amount: number, decimals: number = 2): string => {
+export const formatBaseCurrency = (
+  amount: number,
+  currencyCode: BaseCurrencyCode = 'VUSD',
+  overrideDecimals?: number
+): string => {
   if (isNaN(amount) || amount === null || amount === undefined) return '$0.00';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+
+  const config = SUPPORTED_BASE_CURRENCIES[currencyCode] || SUPPORTED_BASE_CURRENCIES.VUSD;
+  const decimals = overrideDecimals !== undefined ? overrideDecimals : config.precision;
+
+  const formattedNum = new Intl.NumberFormat(config.locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(amount).replace('$', '') + ' VST';
+  }).format(amount);
+
+  return `${config.symbol}${formattedNum} ${config.code}`;
 };
 
 /**
- * Formats standard price (Crypto or Forex).
+ * Backward compatibility alias for currency formatting
+ */
+export const formatCurrency = (amount: number, decimals: number = 2): string => {
+  return formatBaseCurrency(amount, 'VUSD', decimals);
+};
+
+/**
+ * Formats standard price for Crypto or Forex pairs.
  */
 export const formatPrice = (price: number, precision: number = 2): string => {
   if (isNaN(price) || price === null || price === undefined) return '0.00';
@@ -26,7 +43,7 @@ export const formatPrice = (price: number, precision: number = 2): string => {
  * Formats a percentage change with sign (+ / -).
  */
 export const formatPercentage = (percent: number, decimals: number = 2): string => {
-  if (isNaN(percent)) return '0.00%';
+  if (isNaN(percent) || percent === null) return '0.00%';
   const prefix = percent > 0 ? '+' : '';
   return `${prefix}${percent.toFixed(decimals)}%`;
 };

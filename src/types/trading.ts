@@ -1,17 +1,26 @@
-export type AssetType = 'crypto' | 'forex';
+import { BaseCurrencyCode } from '../services/fxRates';
+
+export type MarketArena = 'crypto' | 'forex';
+export type UIMode = 'noob' | 'lite' | 'pro';
+export type ForexLotType = 'standard' | 'mini' | 'micro'; // Standard 100k, Mini 10k, Micro 1k units
+export type ChartStyle = 'candles' | 'heikin_ashi' | 'line';
+export type TimeFrame = '1m' | '5m' | '15m' | '1h' | '4h' | '1D' | '1W' | '1M';
 
 export interface SymbolInfo {
   symbol: string;
   name: string;
-  type: AssetType;
-  tvSymbol: string; // TradingView Symbol ID (e.g. BINANCE:BTCUSDT, OANDA:EURUSD)
+  type: MarketArena;
+  tvSymbol: string;
   basePrice: number;
   precision: number;
   category: string;
   description: string;
+  quoteCurrency?: string; // e.g. USDT, USD, JPY, EUR
+  pipSize?: number;       // e.g. 0.0001 or 0.01 for JPY pairs
+  spreadPips?: number;    // Bid/Ask spread in pips (e.g., 0.8)
 }
 
-export type OrderSide = 'buy' | 'sell'; // Buy = Long, Sell = Short
+export type OrderSide = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit';
 export type PositionStatus = 'open' | 'closed' | 'liquidated';
 
@@ -23,14 +32,28 @@ export interface Position {
   orderType: OrderType;
   entryPrice: number;
   currentPrice: number;
-  quantity: number; // Position size in asset units (e.g. 0.5 BTC)
-  margin: number; // Margin used in VST
-  leverage: number; // 1x to 100x
+
+  // Crypto vs Forex quantity mechanics
+  quantity: number;        // Quantity in coin units (Crypto) or contract units (Forex)
+  forexLotType?: ForexLotType;
+  forexLots?: number;      // e.g. 1.5 lots
+
+  // Margin & Leverage
+  marginInBaseCurrency: number; // Margin collateral in user's active Base Currency (e.g. VIDR / VUSD)
+  marginInUSD: number;
+  leverage: number;         // Crypto: 1x-100x; Forex: 1:100 to 1:500
+
+  // Risk limits
   takeProfit?: number;
   stopLoss?: number;
   liquidationPrice: number;
-  floatingPnl: number;
+
+  // Real-time floating metrics
+  floatingPnlInBaseCurrency: number;
+  floatingPnlInUSD: number;
   floatingPnlPercentage: number;
+  pipsPnl?: number;
+
   openedAt: number;
   closedAt?: number;
   closePrice?: number;
@@ -43,7 +66,10 @@ export interface LimitOrder {
   side: OrderSide;
   targetPrice: number;
   quantity: number;
-  margin: number;
+  forexLotType?: ForexLotType;
+  forexLots?: number;
+  marginInBaseCurrency: number;
+  marginInUSD: number;
   leverage: number;
   takeProfit?: number;
   stopLoss?: number;
@@ -59,26 +85,41 @@ export interface TradeHistoryItem {
   entryPrice: number;
   closePrice: number;
   quantity: number;
-  margin: number;
+  forexLots?: number;
+  marginInBaseCurrency: number;
   leverage: number;
-  realizedPnl: number;
+  realizedPnlInBaseCurrency: number;
+  realizedPnlInUSD: number;
   pnlPercentage: number;
   closedAt: number;
-  reason: 'manual' | 'tp' | 'sl' | 'liquidation';
+  reason: 'manual' | 'tp' | 'sl' | 'liquidation' | 'margin_call';
 }
 
-export interface VSTTopUpRecord {
+export interface TopUpRecord {
   id: string;
-  amount: number;
+  amountInBaseCurrency: number;
+  baseCurrency: BaseCurrencyCode;
+  amountInUSD: number;
   timestamp: number;
   note: string;
 }
 
 export interface WalletState {
-  balance: number; // Current available VST balance
-  initialBalance: number; // Default 10,000 VST
-  totalTopUp: number;
-  realizedPnl: number;
+  baseCurrency: BaseCurrencyCode; // VUSD, VEUR, VJPY, VGBP, VIDR
+  balanceInBaseCurrency: number;  // Current available balance in active base currency
+  initialBalanceUSD: number;      // Default $10,000 USD equivalent
+  totalTopUpUSD: number;
+  realizedPnlUSD: number;
+}
+
+export interface PriceAlert {
+  id: string;
+  symbol: string;
+  targetPrice: number;
+  condition: 'above' | 'below';
+  active: boolean;
+  createdAt: number;
+  triggeredAt?: number;
 }
 
 export interface CryptoFundamental {
