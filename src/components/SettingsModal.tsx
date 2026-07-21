@@ -7,15 +7,11 @@ import {
   User,
   Shield,
   Volume2,
-  VolumeX,
   Key,
   CheckCircle2,
   AlertCircle,
   Sparkles,
-  Lock,
-  Unlock,
   LogOut,
-  Mail,
   Zap,
 } from 'lucide-react';
 
@@ -79,7 +75,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-extrabold text-white">AttaTrader Settings & Modals</h3>
+              <h3 className="text-lg font-extrabold text-white">AttaTrader Settings & Redeem Engine</h3>
               <p className="text-xs text-slate-400">Account Sync, Preferences & Secret Redeem</p>
             </div>
           </div>
@@ -274,7 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         )}
 
-        {/* TAB 4: SECRET REDEEM CODE (@thA1337) */}
+        {/* TAB 4: REDEEM CODE (BLIND INPUT SECURITY FIX) */}
         {activeTab === 'redeem' && (
           <div className="space-y-4 text-xs font-mono">
             <div className="bg-dark-900/90 border border-dark-700 rounded-2xl p-4 space-y-3">
@@ -284,11 +280,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
 
               <form onSubmit={handleRedeemCode} className="space-y-3">
+                {/* Complete Blind Input Fix: Entirely blank placeholder, zero HTML hints, zero hints */}
                 <input
                   type="text"
                   value={redeemInput}
                   onChange={(e) => setRedeemInput(e.target.value)}
-                  placeholder="Enter secret code (e.g. @thA1337)"
+                  placeholder=""
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   className="w-full bg-dark-800 border border-dark-600 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-trade-gold"
                 />
 
@@ -296,7 +297,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   type="submit"
                   className="w-full py-2.5 bg-gradient-to-r from-trade-gold to-amber-500 hover:from-amber-500 hover:to-amber-600 text-dark-900 font-extrabold font-sans rounded-xl transition-all shadow"
                 >
-                  Redeem Code
+                  Submit Redeem Code
                 </button>
               </form>
 

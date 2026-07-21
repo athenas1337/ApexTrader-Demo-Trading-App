@@ -6,7 +6,6 @@ export type ForexLotType = 'standard' | 'mini' | 'micro';
 export type ChartStyle = 'candles' | 'heikin_ashi' | 'line';
 export type TimeFrame = '1m' | '5m' | '15m' | '1h' | '4h' | '1D' | '1W' | '1M';
 
-// Execution Step 1: 3-Tier User Authentication Status
 export type AuthStatus = 'GUEST' | 'EMAIL_USER' | 'GOOGLE_USER';
 
 export interface UserProfile {
@@ -18,11 +17,16 @@ export interface UserProfile {
 }
 
 export interface SettingsState {
-  devModeBypass: boolean;       // Hidden toggle unlocked via secret code @thA1337
-  riskRule2Percent: boolean;    // Custom 2% Capital Risk Limit Rule toggle
-  audioSignals: boolean;        // Audio signal chimes for filled orders and price alerts
+  devModeBypass: boolean;       // Unlocked via secret code @thA1337
+  riskRule2Percent: boolean;    // 2% Capital Risk Limit Rule toggle
+  audioSignals: boolean;        // Audio chimes for filled orders & price alarms
   defaultChartStyle: ChartStyle;
   defaultForexLeverage: number;
+  
+  // Redeem Code Toggles
+  isFreePnLMode: boolean;       // Flips PnL to absolute positive profit (+ Math.abs) via AttaFreePnL
+  isZeroSpreadMode: boolean;    // Eliminates Forex spreads via AttaZeroSpread
+  isGodLeverageMode: boolean;   // Unlocks 1:1000 leverage via AttaGodLeverage
 }
 
 export interface LeaderboardEntry {
@@ -116,7 +120,7 @@ export interface TradeHistoryItem {
   realizedPnlInUSD: number;
   pnlPercentage: number;
   closedAt: number;
-  reason: 'manual' | 'tp' | 'sl' | 'liquidation' | 'margin_call';
+  reason: 'manual' | 'tp' | 'sl' | 'liquidation' | 'margin_call' | 'auto_win';
 }
 
 export interface TopUpRecord {
