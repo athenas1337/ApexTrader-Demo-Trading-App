@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAtta } from '../context/AttaContext';
 import { ChartStyle, TimeFrame } from '../types/trading';
 import { formatBaseCurrency, formatPrice } from '../utils/formatters';
-import { Maximize2, Minimize2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { Maximize2, Minimize2, RefreshCw, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -21,6 +21,8 @@ export const TradingViewChart: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showExecutionOverlay, setShowExecutionOverlay] = useState(true);
   const [useIframeFallback, setUseIframeFallback] = useState(false);
+  const [isBlockedByAdBlocker, setIsBlockedByAdBlocker] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Timeframe and style controls
   const [timeframe, setTimeframe] = useState<TimeFrame>('1h');
@@ -56,10 +58,12 @@ export const TradingViewChart: React.FC = () => {
 
   useEffect(() => {
     setIsLoading(true);
+    setIsBlockedByAdBlocker(false);
     let isMounted = true;
-    let fallbackTimer: any = null;
+    let timeoutTimer: any = null;
 
-    const initWidget = () => {
+    // Safe Auto-Recovery Widget Instantiator with WebGL Re-initialization
+    const initWidget = (isRetry = false) => {
       if (!isMounted || !containerRef.current) return;
       containerRef.current.innerHTML = '';
 
@@ -85,56 +89,94 @@ export const TradingViewChart: React.FC = () => {
               'scalesProperties.textColor': '#94a3b8',
             },
           });
-          if (isMounted) setIsLoading(false);
+          if (isMounted) {
+            setIsLoading(false);
+            setIsBlockedByAdBlocker(false);
+          }
         } else {
-          setUseIframeFallback(true);
-          if (isMounted) setIsLoading(false);
+          if (isMounted) {
+            setIsBlockedByAdBlocker(true);
+            setIsLoading(false);
+          }
         }
       } catch (err) {
-        console.warn('TradingView widget initialization fallback:', err);
-        if (isMounted) {
-          setUseIframeFallback(true);
-          setIsLoading(false);
+        console.warn('TradingView WebGL/Canvas context initialization error:', err);
+        // Auto-Recovery: Canvas Node Clearing & Automatic Single-Retry
+        if (!isRetry) {
+          setTimeout(() => {
+            if (isMounted) {
+              if (containerRef.current) containerRef.current.innerHTML = '';
+              initWidget(true);
+            }
+          }, 500);
+        } else {
+          if (isMounted) {
+            setUseIframeFallback(true);
+            setIsLoading(false);
+          }
         }
       }
     };
 
-    // Load TradingView script dynamically if not present
+    // Explicit 5000ms Timeout Checker for Ad-Blockers / Shields / Network Micro-Drops
+    timeoutTimer = setTimeout(() => {
+      if (isMounted && !window.TradingView) {
+        console.warn('TradingView script loading timed out (5000ms). Possible Ad-Blocker blocking.');
+        setIsBlockedByAdBlocker(true);
+        setIsLoading(false);
+      }
+    }, 5000);
+
+    const startWidgetInit = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (window.TradingView) {
+        initWidget(false);
+      } else {
+        setIsBlockedByAdBlocker(true);
+        setIsLoading(false);
+      }
+    };
+
+    // Programmatic Dynamic Script Loader with Readiness Monitoring
     if (!window.TradingView) {
-      const existingScript = document.getElementById('tradingview-tv-js');
+      const existingScript = document.getElementById('tradingview-tv-js') as HTMLScriptElement;
       if (!existingScript) {
         const script = document.createElement('script');
         script.id = 'tradingview-tv-js';
         script.src = 'https://s3.tradingview.com/tv.js';
         script.async = true;
         script.onload = () => {
-          initWidget();
+          if (isMounted) startWidgetInit();
         };
         script.onerror = () => {
           if (isMounted) {
-            setUseIframeFallback(true);
+            setIsBlockedByAdBlocker(true);
             setIsLoading(false);
           }
         };
         document.head.appendChild(script);
       } else {
-        existingScript.addEventListener('load', initWidget);
-      }
-
-      fallbackTimer = setTimeout(() => {
-        if (isMounted && isLoading) {
-          initWidget();
+        if (window.TradingView) {
+          startWidgetInit();
+        } else {
+          existingScript.addEventListener('load', startWidgetInit);
+          existingScript.addEventListener('error', () => {
+            if (isMounted) {
+              setIsBlockedByAdBlocker(true);
+              setIsLoading(false);
+            }
+          });
         }
-      }, 1500);
+      }
     } else {
-      initWidget();
+      startWidgetInit();
     }
 
     return () => {
       isMounted = false;
-      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
     };
-  }, [selectedSymbol.tvSymbol, timeframe, chartStyle]);
+  }, [selectedSymbol.tvSymbol, timeframe, chartStyle, retryCount]);
 
   const iframeSrc = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(
     selectedSymbol.tvSymbol
@@ -241,7 +283,37 @@ export const TradingViewChart: React.FC = () => {
 
       {/* Main Container */}
       <div className="relative flex-1 w-full bg-dark-900">
-        {!useIframeFallback ? (
+        {isBlockedByAdBlocker ? (
+          <div className="absolute inset-0 z-40 bg-dark-900/95 flex flex-col items-center justify-center p-6 text-center space-y-4 animate-fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-xl">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <div className="max-w-md space-y-1.5">
+              <h4 className="text-base font-extrabold text-white tracking-tight">Gagal memuat grafik</h4>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                Gagal memuat grafik. Harap matikan Ad-Blocker/Shields pada browser Anda.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setRetryCount((prev) => prev + 1)}
+                className="px-4 py-2 bg-trade-accent hover:bg-blue-600 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center space-x-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Coba Lagi</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsBlockedByAdBlocker(false);
+                  setUseIframeFallback(true);
+                }}
+                className="px-4 py-2 bg-dark-800 hover:bg-dark-700 border border-dark-600 text-slate-300 hover:text-white font-bold text-xs rounded-xl transition-all"
+              >
+                Gunakan Mode Standar
+              </button>
+            </div>
+          </div>
+        ) : !useIframeFallback ? (
           <div id={containerIdRef.current} ref={containerRef} className="w-full h-full" />
         ) : (
           <iframe
