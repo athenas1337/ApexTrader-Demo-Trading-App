@@ -46,7 +46,7 @@ export const TradingViewChart: React.FC = () => {
 
   const iframeSrc = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(
     selectedSymbol.tvSymbol
-  )}&interval=${getTimeframeInterval(timeframe)}&symboledit=0&saveimage=0&toolbarbg=121722&theme=dark&style=${getTradingViewStyle(
+  )}&interval=${getTimeframeInterval(timeframe)}&hidetoolbar=0&hide_side_toolbar=0&symboledit=1&saveimage=1&toolbarbg=121722&theme=dark&style=${getTradingViewStyle(
     chartStyle
   )}&timezone=Etc%2FUTC&locale=en`;
 
