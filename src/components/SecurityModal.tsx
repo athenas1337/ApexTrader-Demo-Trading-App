@@ -41,9 +41,9 @@ export const SecurityModal: React.FC<SecurityModalProps> = ({ isOpen, onClose })
           <div className="bg-dark-900/80 border border-dark-700 rounded-2xl p-4 flex items-start space-x-3">
             <Key className="w-5 h-5 text-trade-gold shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-bold text-white text-sm mb-1">Secret Code Validation (@thA1337)</h4>
+              <h4 className="font-bold text-white text-sm mb-1">Confidential Developer Verification Engine</h4>
               <p className="text-slate-400 leading-relaxed">
-                Case-sensitive string validator for secret redeem code <code className="text-trade-gold bg-dark-800 px-1 py-0.5 rounded font-mono">@thA1337</code> unlocking Developer Mode Bypass Toggle.
+                Blind input string validator for confidential developer authentication, tournament lifespan scheduler, and mode bypass.
               </p>
             </div>
           </div>

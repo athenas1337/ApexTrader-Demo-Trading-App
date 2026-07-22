@@ -23,6 +23,7 @@ import {
 import { TopUpModal } from './TopUpModal';
 import { SecurityModal } from './SecurityModal';
 import { SettingsModal } from './SettingsModal';
+import { DevTournamentConfigModal } from './DevTournamentConfigModal';
 
 interface HeaderProps {
   activeTab: 'trading' | 'portfolio' | 'fundamentals' | 'tournament';
@@ -43,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     userProfile,
     isWeekendTournamentActive,
     livePrices,
+    showDevConfigModal,
+    setShowDevConfigModal,
   } = useAtta();
 
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
@@ -56,8 +59,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   return (
     <>
-      <header className="bg-dark-800/95 backdrop-blur-md border-b border-dark-600/60 sticky top-0 z-40 px-4 py-2.5">
-        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-3">
+      <header className="bg-dark-800/95 backdrop-blur-md border-b border-dark-600/60 sticky top-0 z-40 px-3 sm:px-4 py-2.5">
+        <div className="max-w-[1920px] mx-auto flex flex-nowrap md:flex-wrap items-center justify-between gap-2.5 sm:gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           
           {/* Left: Brand & Market Switcher */}
           <div className="flex items-center space-x-3 sm:space-x-4">
@@ -283,6 +286,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       <TopUpModal isOpen={isTopUpOpen} onClose={() => setIsTopUpOpen(false)} />
       <SecurityModal isOpen={isSecurityOpen} onClose={() => setIsSecurityOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <DevTournamentConfigModal isOpen={showDevConfigModal} onClose={() => setShowDevConfigModal(false)} />
     </>
   );
 };

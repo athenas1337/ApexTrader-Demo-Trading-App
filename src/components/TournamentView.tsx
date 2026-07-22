@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { TournamentCelebrationModal } from './TournamentCelebrationModal';
+import { ActivePositionsQuickClose } from './ActivePositionsQuickClose';
 
 export const TournamentView: React.FC = () => {
   const {
@@ -87,7 +88,7 @@ export const TournamentView: React.FC = () => {
                 <h2 className="text-xl font-extrabold text-white tracking-tight">AttaTrader Weekend Tournament</h2>
                 {settings.devModeBypass && (
                   <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[10px] font-bold font-mono">
-                    DEV BYPASS ACTIVE (@thA1337)
+                    DEVELOPER VERIFICATION ACTIVE
                   </span>
                 )}
               </div>
@@ -118,6 +119,7 @@ export const TournamentView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
           <TradingViewChart />
+          <ActivePositionsQuickClose />
         </div>
 
         <div className="lg:col-span-4 space-y-6">

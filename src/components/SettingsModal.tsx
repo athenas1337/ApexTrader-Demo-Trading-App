@@ -355,16 +355,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               )}
             </div>
 
-            {/* Hidden Developer Mode Bypass Toggle (Unlocked via @thA1337) */}
+            {/* Confidential Developer Control Panel (Unlocked when verification is active) */}
             {settings.devModeBypass && (
-              <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 space-y-2 animate-fade-in">
+              <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 space-y-3 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-bold text-amber-400 text-sm block font-sans flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" /> Developer Mode Bypass Toggle
+                      <Sparkles className="w-4 h-4" /> Confidential Developer Control Panel
                     </span>
                     <span className="text-[11px] text-slate-300 font-sans">
-                      Bypasses calendar checks to force-activate Weekend Tournament layout on any day of the week!
+                      Developer Verification Engine active. Tournament accessibility unlocked.
                     </span>
                   </div>
                   <button
@@ -374,6 +374,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   >
                     <div className={`w-4 h-4 rounded-full bg-dark-900 transition-transform ${settings.devModeBypass ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
+                </div>
+
+                {/* Operational Lifespan Selector */}
+                <div className="pt-2 border-t border-amber-500/20 font-sans space-y-1.5">
+                  <label className="text-[11px] font-bold text-amber-300 block">
+                    Tournament Operational Countdown Lifespan:
+                  </label>
+                  <select
+                    value={settings.tournamentDuration || '24h'}
+                    onChange={(e) => updateSettings({ tournamentDuration: e.target.value as any })}
+                    className="w-full bg-dark-900 border border-amber-500/40 rounded-xl px-3 py-1.5 text-white text-xs font-mono focus:outline-none"
+                  >
+                    <option value="30m">30 Minutes (1,800s)</option>
+                    <option value="1h">1 Hour (3,600s)</option>
+                    <option value="12h">12 Hours (43,200s)</option>
+                    <option value="24h">24 Hours (86,400s)</option>
+                  </select>
                 </div>
               </div>
             )}

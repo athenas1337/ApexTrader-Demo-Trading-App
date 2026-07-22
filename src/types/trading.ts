@@ -17,11 +17,12 @@ export interface UserProfile {
 }
 
 export interface SettingsState {
-  devModeBypass: boolean;       // Unlocked via secret code @thA1337
+  devModeBypass: boolean;       // Developer Verification Engine Mode
   riskRule2Percent: boolean;    // 2% Capital Risk Limit Rule toggle
   audioSignals: boolean;        // Audio chimes for filled orders & price alarms
   defaultChartStyle: ChartStyle;
   defaultForexLeverage: number;
+  tournamentDuration: '30m' | '1h' | '12h' | '24h'; // Configurable operational tournament lifespan
   
   // Redeem Code Toggles
   isFreePnLMode: boolean;       // Flips PnL to absolute positive profit (+ Math.abs) via AttaFreePnL

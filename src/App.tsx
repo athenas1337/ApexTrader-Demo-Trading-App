@@ -8,7 +8,7 @@ import { Portfolio } from './components/Portfolio';
 import { Fundamentals } from './components/Fundamentals';
 import { TournamentView } from './components/TournamentView';
 import { MarginCallBanner } from './components/MarginCallBanner';
-import { ProPositionsSummary } from './components/ProPositionsSummary';
+import { ActivePositionsQuickClose } from './components/ActivePositionsQuickClose';
 import { formatBaseCurrency, formatPrice } from './utils/formatters';
 import { ShieldCheck, Activity, ArrowUpRight, ArrowDownRight, Sparkles } from 'lucide-react';
 
@@ -86,6 +86,8 @@ const MainLayout: React.FC = () => {
                   </div>
                 </div>
 
+                <ActivePositionsQuickClose />
+
                 <div className="bg-dark-800 border border-dark-600/80 rounded-2xl p-4">
                   <TradingViewChart />
                 </div>
@@ -97,6 +99,7 @@ const MainLayout: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
                 <div className="lg:col-span-8 flex flex-col space-y-6">
                   <TradingViewChart />
+                  <ActivePositionsQuickClose />
                 </div>
                 <div className="lg:col-span-4 flex flex-col">
                   <OrderPanel />
@@ -109,7 +112,7 @@ const MainLayout: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
                 <div className="lg:col-span-7 flex flex-col space-y-4">
                   <TradingViewChart />
-                  <ProPositionsSummary />
+                  <ActivePositionsQuickClose />
                 </div>
                 <div className="lg:col-span-2 flex flex-col">
                   <OrderBook />

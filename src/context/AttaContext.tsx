@@ -26,6 +26,18 @@ import confetti from 'canvas-confetti';
 
 const DEFAULT_INITIAL_BALANCE_USD = 10000;
 
+export type TournamentDurationOption = '30m' | '1h' | '12h' | '24h';
+
+export const getDurationSeconds = (option: TournamentDurationOption): number => {
+  switch (option) {
+    case '30m': return 1800;
+    case '1h': return 3600;
+    case '12h': return 43200;
+    case '24h': return 86400;
+    default: return 86400;
+  }
+};
+
 interface AttaContextType {
   // Config & State
   wallet: WalletState;
@@ -58,6 +70,10 @@ interface AttaContextType {
   tournamentSecondsLeft: number;
   showCelebrationModal: boolean;
   setShowCelebrationModal: (show: boolean) => void;
+  showDevConfigModal: boolean;
+  setShowDevConfigModal: (show: boolean) => void;
+  changeTournamentDuration: (duration: TournamentDurationOption) => void;
+  setDevModeActive: (active: boolean) => void;
 
   // Trading lists
   positions: Position[];
@@ -120,6 +136,7 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       audioSignals: true,
       defaultChartStyle: 'candles',
       defaultForexLeverage: 100,
+      tournamentDuration: '24h',
       isFreePnLMode: false,
       isZeroSpreadMode: false,
       isGodLeverageMode: false,
@@ -232,11 +249,20 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 1. Secret Developer Key: @thA1337
       if (code === '@thA1337') {
-        setSettings((prev) => ({ ...prev, devModeBypass: true }));
+        let isToggledOn = false;
+        setSettings((prev) => {
+          isToggledOn = !prev.devModeBypass;
+          return { ...prev, devModeBypass: isToggledOn };
+        });
+        if (!settings.devModeBypass) {
+          setShowDevConfigModal(true);
+        }
         try { confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } }); } catch (e) {}
         return {
           success: true,
-          message: '🎉 Developer Mode Bypass Unlocked via @thA1337!',
+          message: !settings.devModeBypass
+            ? '🎉 Developer Verification Mode: ACTIVATED (Tournament Unlocked)'
+            : 'Developer Verification Mode: DEACTIVATED (Tournament Locked)',
         };
       }
 
@@ -425,10 +451,8 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [baseCurrency, marketArena, livePrices, positions, wallet.balanceInBaseCurrency, settings.isFreePnLMode, settings.isZeroSpreadMode, settings.isGodLeverageMode]
   );
 
-  // Weekend Tournament Calendar Evaluation
-  const todayDay = new Date().getDay();
-  const isWeekendCalendar = todayDay === 0 || todayDay === 6;
-  const isWeekendTournamentActive = isWeekendCalendar || settings.devModeBypass;
+  // Tournament Engine Accessibility (Controlled 100% via Secret Verification Key Toggle)
+  const isWeekendTournamentActive = settings.devModeBypass;
 
   // Base Currency Switcher
   const setBaseCurrency = useCallback(
@@ -761,26 +785,39 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPriceAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  // Tournament 24-Hour Session Timer & Celebration State
-  const [tournamentSecondsLeft, setTournamentSecondsLeft] = useState<number>(86400);
+  // Operational Lifespan Countdown Timer & Dev Config Overlay State
+  const currentDurationOption: TournamentDurationOption = settings.tournamentDuration || '24h';
+  const [tournamentSecondsLeft, setTournamentSecondsLeft] = useState<number>(() =>
+    getDurationSeconds(currentDurationOption)
+  );
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
+  const [showDevConfigModal, setShowDevConfigModal] = useState<boolean>(false);
+
+  const changeTournamentDuration = useCallback((duration: TournamentDurationOption) => {
+    setSettings((prev) => ({ ...prev, tournamentDuration: duration }));
+    const newSecs = getDurationSeconds(duration);
+    setTournamentSecondsLeft(newSecs);
+  }, []);
+
+  const setDevModeActive = useCallback((active: boolean) => {
+    setSettings((prev) => ({ ...prev, devModeBypass: active }));
+    if (active) {
+      setShowDevConfigModal(true);
+    }
+  }, []);
 
   useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date();
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      const diffMs = endOfDay.getTime() - now.getTime();
-      const secs = Math.max(0, Math.floor(diffMs / 1000));
-      setTournamentSecondsLeft(secs);
+    const timer = setInterval(() => {
+      setTournamentSecondsLeft((prevSecs) => {
+        if (prevSecs <= 1) {
+          setShowCelebrationModal(true);
+          return 0;
+        }
+        return prevSecs - 1;
+      });
+    }, 1000);
 
-      if (secs === 0) {
-        setShowCelebrationModal(true);
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
+    return () => clearInterval(timer);
   }, []);
 
   const formatSecondsToHMS = (totalSeconds: number): string => {
@@ -940,6 +977,10 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tournamentSecondsLeft,
         showCelebrationModal,
         setShowCelebrationModal,
+        showDevConfigModal,
+        setShowDevConfigModal,
+        changeTournamentDuration,
+        setDevModeActive,
         positions: updatedPositions,
         limitOrders,
         tradeHistory,
