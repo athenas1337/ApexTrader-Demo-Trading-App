@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAtta } from '../context/AttaContext';
 import { ChartStyle, TimeFrame } from '../types/trading';
 import { formatBaseCurrency, formatPrice } from '../utils/formatters';
-import { Maximize2, Minimize2, RefreshCw, Eye, EyeOff, Layers } from 'lucide-react';
+import { Maximize2, Minimize2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -13,10 +13,14 @@ declare global {
 export const TradingViewChart: React.FC = () => {
   const { selectedSymbol, positions, livePrices, baseCurrency } = useAtta();
   const containerRef = useRef<HTMLDivElement>(null);
-  
+  const containerIdRef = useRef<string>(
+    `tv_chart_${Math.random().toString(36).substring(2, 9)}`
+  );
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showExecutionOverlay, setShowExecutionOverlay] = useState(true);
+  const [useIframeFallback, setUseIframeFallback] = useState(false);
 
   // Timeframe and style controls
   const [timeframe, setTimeframe] = useState<TimeFrame>('1h');
@@ -52,47 +56,91 @@ export const TradingViewChart: React.FC = () => {
 
   useEffect(() => {
     setIsLoading(true);
-    let widgetInstance: any = null;
+    let isMounted = true;
+    let fallbackTimer: any = null;
 
-    const createWidget = () => {
-      if (window.TradingView && containerRef.current) {
-        containerRef.current.innerHTML = '';
+    const initWidget = () => {
+      if (!isMounted || !containerRef.current) return;
+      containerRef.current.innerHTML = '';
 
-        widgetInstance = new window.TradingView.widget({
-          autosize: true,
-          symbol: selectedSymbol.tvSymbol,
-          interval: getTimeframeInterval(timeframe),
-          timezone: 'Etc/UTC',
-          theme: 'dark',
-          style: getTradingViewStyle(chartStyle),
-          locale: 'en',
-          toolbar_bg: '#121722',
-          enable_publishing: false,
-          hide_side_toolbar: false,
-          allow_symbol_change: false,
-          container_id: 'tradingview_chart_container',
-          gridColor: 'rgba(255, 255, 255, 0.04)',
-          studies: ['RSI@tv-basicstudies', 'MASimple@tv-basicstudies'],
-          disabled_features: ['header_symbol_search'],
-          enabled_features: ['study_templates', 'use_localstorage_for_settings'],
-        });
-
-        setTimeout(() => setIsLoading(false), 700);
+      try {
+        if (window.TradingView && window.TradingView.widget) {
+          new window.TradingView.widget({
+            autosize: true,
+            symbol: selectedSymbol.tvSymbol,
+            interval: getTimeframeInterval(timeframe),
+            timezone: 'Etc/UTC',
+            theme: 'dark',
+            style: getTradingViewStyle(chartStyle),
+            locale: 'en',
+            toolbar_bg: '#121722',
+            enable_publishing: false,
+            hide_side_toolbar: false,
+            allow_symbol_change: false,
+            container_id: containerIdRef.current,
+            overrides: {
+              'paneProperties.background': '#0d1117',
+              'paneProperties.vertGridProperties.color': 'rgba(255, 255, 255, 0.04)',
+              'paneProperties.horzGridProperties.color': 'rgba(255, 255, 255, 0.04)',
+              'scalesProperties.textColor': '#94a3b8',
+            },
+          });
+          if (isMounted) setIsLoading(false);
+        } else {
+          setUseIframeFallback(true);
+          if (isMounted) setIsLoading(false);
+        }
+      } catch (err) {
+        console.warn('TradingView widget initialization fallback:', err);
+        if (isMounted) {
+          setUseIframeFallback(true);
+          setIsLoading(false);
+        }
       }
     };
 
-    if (window.TradingView) {
-      createWidget();
-    } else {
-      const interval = setInterval(() => {
-        if (window.TradingView) {
-          clearInterval(interval);
-          createWidget();
+    // Load TradingView script dynamically if not present
+    if (!window.TradingView) {
+      const existingScript = document.getElementById('tradingview-tv-js');
+      if (!existingScript) {
+        const script = document.createElement('script');
+        script.id = 'tradingview-tv-js';
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = () => {
+          initWidget();
+        };
+        script.onerror = () => {
+          if (isMounted) {
+            setUseIframeFallback(true);
+            setIsLoading(false);
+          }
+        };
+        document.head.appendChild(script);
+      } else {
+        existingScript.addEventListener('load', initWidget);
+      }
+
+      fallbackTimer = setTimeout(() => {
+        if (isMounted && isLoading) {
+          initWidget();
         }
-      }, 200);
-      return () => clearInterval(interval);
+      }, 1500);
+    } else {
+      initWidget();
     }
+
+    return () => {
+      isMounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
   }, [selectedSymbol.tvSymbol, timeframe, chartStyle]);
+
+  const iframeSrc = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(
+    selectedSymbol.tvSymbol
+  )}&interval=${getTimeframeInterval(timeframe)}&symboledit=0&saveimage=0&toolbarbg=121722&theme=dark&style=${getTradingViewStyle(
+    chartStyle
+  )}&timezone=Etc%2FUTC&locale=en`;
 
   return (
     <div
@@ -105,7 +153,11 @@ export const TradingViewChart: React.FC = () => {
         {/* Left: Asset info */}
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${selectedSymbol.type === 'crypto' ? 'bg-amber-400' : 'bg-blue-400'} animate-pulse`} />
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                selectedSymbol.type === 'crypto' ? 'bg-amber-400' : 'bg-blue-400'
+              } animate-pulse`}
+            />
             <span className="text-xs font-bold text-white tracking-wide">{selectedSymbol.name}</span>
           </div>
           <span className="text-[11px] font-mono font-medium text-slate-300 bg-dark-700 px-2 py-0.5 rounded border border-dark-600">
@@ -189,7 +241,16 @@ export const TradingViewChart: React.FC = () => {
 
       {/* Main Container */}
       <div className="relative flex-1 w-full bg-dark-900">
-        <div id="tradingview_chart_container" ref={containerRef} className="w-full h-full" />
+        {!useIframeFallback ? (
+          <div id={containerIdRef.current} ref={containerRef} className="w-full h-full" />
+        ) : (
+          <iframe
+            title="TradingView Chart"
+            src={iframeSrc}
+            className="w-full h-full border-0"
+            allowFullScreen
+          />
+        )}
 
         {/* Interactive Execution Lines Overlay (HTML5 SVG Overlay) */}
         {showExecutionOverlay && activePositionsForSymbol.length > 0 && (
@@ -205,11 +266,16 @@ export const TradingViewChart: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center justify-between font-mono text-xs font-bold mb-1">
-                    <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${isBuy ? 'bg-trade-green text-dark-900' : 'bg-trade-red text-white'}`}>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] uppercase ${
+                        isBuy ? 'bg-trade-green text-dark-900' : 'bg-trade-red text-white'
+                      }`}
+                    >
                       {pos.side.toUpperCase()} POSITION
                     </span>
                     <span className={isProfit ? 'text-trade-green' : 'text-trade-red'}>
-                      {isProfit ? '+' : ''}{formatBaseCurrency(pos.floatingPnlInBaseCurrency, baseCurrency)}
+                      {isProfit ? '+' : ''}
+                      {formatBaseCurrency(pos.floatingPnlInBaseCurrency, baseCurrency)}
                     </span>
                   </div>
 
@@ -227,8 +293,12 @@ export const TradingViewChart: React.FC = () => {
                   {/* TP & SL line targets */}
                   {(pos.takeProfit || pos.stopLoss) && (
                     <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1.5 pt-1 border-t border-white/5">
-                      {pos.takeProfit && <span className="text-trade-green">TP: ${formatPrice(pos.takeProfit, pos.symbolInfo.precision)}</span>}
-                      {pos.stopLoss && <span className="text-trade-red">SL: ${formatPrice(pos.stopLoss, pos.symbolInfo.precision)}</span>}
+                      {pos.takeProfit && (
+                        <span className="text-trade-green">TP: ${formatPrice(pos.takeProfit, pos.symbolInfo.precision)}</span>
+                      )}
+                      {pos.stopLoss && (
+                        <span className="text-trade-red">SL: ${formatPrice(pos.stopLoss, pos.symbolInfo.precision)}</span>
+                      )}
                     </div>
                   )}
                 </div>
