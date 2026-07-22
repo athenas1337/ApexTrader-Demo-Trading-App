@@ -51,6 +51,16 @@ class DynamicPriceFeedService {
 
   public updatePrice(symbol: string, price: number) {
     this.prices.set(symbol, price);
+
+    // Fallback Storage-Driven State Sync for Mobile Throttling (Chrome 150+ / OPPO ColorOS 16.0.5)
+    if (typeof window !== 'undefined') {
+      if (!(window as any).lastPriceTick) {
+        (window as any).lastPriceTick = {};
+      }
+      (window as any).lastPriceTick[symbol] = price;
+      (window as any).lastPriceTickTimestamp = Date.now();
+    }
+
     const callbacks = this.listeners.get(symbol);
     if (callbacks) {
       callbacks.forEach((cb) => cb(symbol, price));

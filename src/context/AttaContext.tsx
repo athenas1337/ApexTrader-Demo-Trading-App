@@ -501,7 +501,24 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     symbolsToSub.forEach((sym) => {
       const details = getSymbolDetails(sym);
       const unsub = priceFeed.subscribe(sym, details.basePrice, (symbolKey, price) => {
-        setLivePrices((prev) => ({ ...prev, [symbolKey]: price }));
+        // Fallback Storage-Driven State Sync for Mobile Throttling (Chrome 150+ / OPPO ColorOS 16.0.5)
+        if (typeof window !== 'undefined') {
+          if (!(window as any).lastPriceTick) (window as any).lastPriceTick = {};
+          (window as any).lastPriceTick[symbolKey] = price;
+          (window as any).lastPriceTickTimestamp = Date.now();
+        }
+
+        // Intercept OS background/power-saving state throttling via requestAnimationFrame
+        if (typeof requestAnimationFrame !== 'undefined') {
+          requestAnimationFrame(() => {
+            setLivePrices((prev) => {
+              if (prev[symbolKey] === price) return prev;
+              return { ...prev, [symbolKey]: price };
+            });
+          });
+        } else {
+          setLivePrices((prev) => ({ ...prev, [symbolKey]: price }));
+        }
       });
       unsubscribes.push(unsub);
     });
@@ -510,6 +527,38 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribes.forEach((unsub) => unsub());
     };
   }, [selectedSymbol.symbol, positions.length, limitOrders.length]);
+
+  // Mobile Keep-Alive Heartbeat: Force-syncs livePrices from window.lastPriceTick snapshot if OS throttles React state
+  useEffect(() => {
+    let animFrameId: number;
+    let lastCheckedTimestamp = 0;
+
+    const checkGlobalTickSync = () => {
+      if (typeof window !== 'undefined' && (window as any).lastPriceTick) {
+        const globalTicks = (window as any).lastPriceTick as Record<string, number>;
+        const globalTimestamp = ((window as any).lastPriceTickTimestamp as number) || 0;
+
+        if (globalTimestamp > lastCheckedTimestamp) {
+          lastCheckedTimestamp = globalTimestamp;
+          setLivePrices((prev) => {
+            let hasChanged = false;
+            const updated = { ...prev };
+            for (const sym in globalTicks) {
+              if (updated[sym] !== globalTicks[sym]) {
+                updated[sym] = globalTicks[sym];
+                hasChanged = true;
+              }
+            }
+            return hasChanged ? updated : prev;
+          });
+        }
+      }
+      animFrameId = requestAnimationFrame(checkGlobalTickSync);
+    };
+
+    animFrameId = requestAnimationFrame(checkGlobalTickSync);
+    return () => cancelAnimationFrame(animFrameId);
+  }, []);
 
   // Liquidation Price helper
   const calculateLiquidationPrice = (side: OrderSide, entryPrice: number, leverage: number): number => {
@@ -858,9 +907,10 @@ export const AttaProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, []);
 
-  // Real-Time PnL & Dynamic Used Margin Calculation Interceptor
+  // Real-Time PnL & Dynamic Used Margin Calculation Interceptor (O(1) Fast-Path Access)
   const updatedPositions = positions.map((pos) => {
-    const currentPrice = livePrices[pos.symbol] || pos.entryPrice;
+    const rawGlobalPrice = typeof window !== 'undefined' && (window as any).lastPriceTick?.[pos.symbol];
+    const currentPrice = rawGlobalPrice || livePrices[pos.symbol] || pos.entryPrice;
     let pnlUSD = 0;
     let pipsPnl = 0;
 
